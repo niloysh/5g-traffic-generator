@@ -46,3 +46,8 @@ install(TARGETS pcap_analyzer DESTINATION bin)
 add_executable(gtpu_replay src/gtpu_replay.c)
 target_link_libraries(gtpu_replay ${PCAP_LIBRARIES})
 install(TARGETS gtpu_replay DESTINATION bin)
+
+# Executable for gtpu_anomaly_injector
+add_executable(gtpu_anomaly_injector src/gtpu_anomaly_injector.c)
+target_link_libraries(gtpu_anomaly_injector ${PCAP_LIBRARIES})
+install(TARGETS gtpu_anomaly_injector DESTINATION bin)
