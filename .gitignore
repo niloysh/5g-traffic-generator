@@ -41,6 +41,7 @@ Thumbs.db
 
 # PCAP files
 pcaps/
+pcaps_gtpu*/
 
 # cache
 *.cache
