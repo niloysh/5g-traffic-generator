@@ -1,12 +1,43 @@
-CMakeLists.txt.user
+# CMake-related files (generated during build)
+build/
 CMakeCache.txt
-CMakeFiles
-CMakeScripts
-Testing
-Makefile
+CMakeFiles/
+CMakeScripts/
 cmake_install.cmake
+Makefile
 install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
-_deps
+_deps/
 CMakeUserPresets.json
+CMakeLists.txt.user
+
+# Compilation output (object files, executables)
+*.o
+*.d
+*.exe
+*.out
+
+# Editor and IDE specific files
+.vscode/
+*.swp
+*.swo
+.idea/
+*.iml
+
+# Temporary files and backups
+*~
+\#*\#
+.*.swp  # Vim swap files
+*.bak
+*.orig
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Package/build system specific
+*.log
+
+# PCAP files
+pcaps/
