@@ -1,0 +1,102 @@
+{
+  "0x2000": {
+    "app": "battlegrounds",
+    "qfi": 1,
+    "pcap": "teid_0x2000_battlegrounds_qfi1.pcap"
+  },
+  "0x2001": {
+    "app": "roblox",
+    "qfi": 1,
+    "pcap": "teid_0x2001_roblox_qfi1.pcap"
+  },
+  "0x2002": {
+    "app": "geforce",
+    "qfi": 2,
+    "pcap": "teid_0x2002_geforce_qfi2.pcap"
+  },
+  "0x2003": {
+    "app": "zoom",
+    "qfi": 3,
+    "pcap": "teid_0x2003_zoom_qfi3.pcap"
+  },
+  "0x2004": {
+    "app": "teams",
+    "qfi": 3,
+    "pcap": "teid_0x2004_teams_qfi3.pcap"
+  },
+  "0x2005": {
+    "app": "youtubelive",
+    "qfi": 3,
+    "pcap": "teid_0x2005_youtubelive_qfi3.pcap"
+  },
+  "0x2006": {
+    "app": "netflix",
+    "qfi": 5,
+    "pcap": "teid_0x2006_netflix_qfi5.pcap"
+  },
+  "0x2007": {
+    "app": "battlegrounds",
+    "qfi": 1,
+    "pcap": "teid_0x2007_battlegrounds_qfi1.pcap"
+  },
+  "0x2008": {
+    "app": "roblox",
+    "qfi": 1,
+    "pcap": "teid_0x2008_roblox_qfi1.pcap"
+  },
+  "0x2009": {
+    "app": "geforce",
+    "qfi": 2,
+    "pcap": "teid_0x2009_geforce_qfi2.pcap"
+  },
+  "0x200a": {
+    "app": "zoom",
+    "qfi": 3,
+    "pcap": "teid_0x200a_zoom_qfi3.pcap"
+  },
+  "0x200b": {
+    "app": "teams",
+    "qfi": 3,
+    "pcap": "teid_0x200b_teams_qfi3.pcap"
+  },
+  "0x200c": {
+    "app": "youtubelive",
+    "qfi": 3,
+    "pcap": "teid_0x200c_youtubelive_qfi3.pcap"
+  },
+  "0x200d": {
+    "app": "netflix",
+    "qfi": 5,
+    "pcap": "teid_0x200d_netflix_qfi5.pcap"
+  },
+  "0x200e": {
+    "app": "battlegrounds",
+    "qfi": 1,
+    "pcap": "teid_0x200e_battlegrounds_qfi1.pcap"
+  },
+  "0x200f": {
+    "app": "roblox",
+    "qfi": 1,
+    "pcap": "teid_0x200f_roblox_qfi1.pcap"
+  },
+  "0x2010": {
+    "app": "geforce",
+    "qfi": 2,
+    "pcap": "teid_0x2010_geforce_qfi2.pcap"
+  },
+  "0x2011": {
+    "app": "zoom",
+    "qfi": 3,
+    "pcap": "teid_0x2011_zoom_qfi3.pcap"
+  },
+  "0x2012": {
+    "app": "teams",
+    "qfi": 3,
+    "pcap": "teid_0x2012_teams_qfi3.pcap"
+  },
+  "0x2013": {
+    "app": "youtubelive",
+    "qfi": 3,
+    "pcap": "teid_0x2013_youtubelive_qfi3.pcap"
+  }
+}
