@@ -38,7 +38,7 @@
 #define SRC_IP "192.168.44.13"
 #define DST_IP "192.168.44.18"
 #define DST_MAC "\xe4\x1d\x2d\x09\xa8\x30"
-#define NUM_THREADS 8
+#define NUM_THREADS 4
 #define STATS_INTERVAL 5
 #define MAX_PKT_SIZE 1514
 #define TARGET_PPS 100000 // Per-thread packet rate limit
