@@ -20,6 +20,7 @@
 
 #include <arpa/inet.h>
 #include <float.h>
+#include <netinet/ether.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <pcap.h>
@@ -90,16 +91,36 @@ void bucket_packet_size(stats_t *stats, uint32_t len) {
 }
 
 void process_packet(const struct pcap_pkthdr *header, const u_char *packet,
-                    int link_header_len, stats_t *stats) {
-  struct ip *ip_hdr;
-  double current_time;
+                    int link_header_len, int datalink_type, stats_t *stats) {
 
-  if (header->caplen < link_header_len + sizeof(struct ip))
+  if (header->caplen < link_header_len + sizeof(struct ip)) {
+    printf("Skipping: too short\n");
     return;
+  }
 
-  ip_hdr = (struct ip *)(packet + link_header_len);
-  if (ip_hdr->ip_p != IPPROTO_UDP)
-    return;
+  if (datalink_type == DLT_EN10MB) {
+
+    // struct ether_header *eth = (struct ether_header *)packet;
+    // uint16_t eth_type = ntohs(eth->ether_type);
+    // printf("EtherType = 0x%04x\n", eth_type);
+
+    // if (eth_type != ETHERTYPE_IP) {
+    //   printf("Skipping: not IPv4\n");
+    //   return;
+    // }
+  }
+
+  double current_time = 0.0;
+
+  // struct ip *ip_hdr = (struct ip *)(packet + link_header_len);
+  // printf("IP protocol = %d\n", ip_hdr->ip_p);
+
+  // if (ip_hdr->ip_p != IPPROTO_UDP) {
+  //   printf("Skipping: not UDP\n");
+  //   return;
+  // }
+
+  // printf("Accepted packet!\n");
 
   if (!stats->first_packet) {
     stats->first_ts = header->ts;
@@ -253,7 +274,7 @@ int main(int argc, char *argv[]) {
   stats_t stats = {0};
 
   while ((packet = pcap_next(handle, &header)) != NULL) {
-    process_packet(&header, packet, link_header_len, &stats);
+    process_packet(&header, packet, link_header_len, datalink_type, &stats);
   }
 
   print_stats(json_file, &stats);

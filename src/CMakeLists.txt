@@ -1,3 +1,6 @@
+# Output all binaries to top-level build/ folder
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 set(SOURCES
   gtpu_cbr_generator.c
   gtpu_encapsulator.c
