@@ -40,8 +40,7 @@ Thumbs.db
 *.log
 
 # PCAP files
-pcaps/
-pcaps_gtpu*/
+pcaps*/
 
 # cache
 *.cache

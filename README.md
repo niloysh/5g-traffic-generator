@@ -12,6 +12,7 @@ sudo apt-get install libpcap-dev
 
 ## Quick Start
 ```
+sudo apt-get install libpcap-dev libjansson-dev
 mkdir build
 cd build
 cmake ..
@@ -38,6 +39,7 @@ Sent GTP-U packet 4 with TEID=0x103 and QFI=8
 - `pcap_analyzer`: Parses and analyzes PCAP traces to extract traffic statistics.
 - `gtpu_encapsulator`: Wraps PCAP files in GTP-U + outer IP/UDP/Ethernet headers.
 - `gtpu_replay`: Replays GTP-U packets from a pcap file created by `gtpu_encapsulator`.
+- `gtpu_traffic_generator`: Profile-driven sender (variable sizes/rates, app-like patterns).
 
 ## GTP-U Header Format
 
