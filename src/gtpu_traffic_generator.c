@@ -284,21 +284,52 @@ void *sender_thread(void *arg) {
   return NULL;
 }
 
+void print_human_pps(char *buf, size_t len, unsigned long pps) {
+  if (pps >= 1000000) {
+    snprintf(buf, len, "%.2fM", pps / 1e6);
+  } else if (pps >= 1000) {
+    snprintf(buf, len, "%.2fK", pps / 1e3);
+  } else {
+    snprintf(buf, len, "%lu", pps);
+  }
+}
+
 void *reporter_thread(void *arg) {
   (void)arg;
   while (!stop) {
     sleep(5);
-    printf("[Global Report]");
+    unsigned long total_pps = 0;
+    unsigned long total_bytes = 0;
+
+    printf("\n[Stats] Active QFIs:\n");
+    printf("  QFI |   PPS   |  Mbps\n");
+    printf("------+---------+--------\n");
+
     for (int qfi = 0; qfi < 64; qfi++) {
       unsigned long pps = atomic_exchange(&global_qfi_stats[qfi].pps, 0);
       unsigned long bytes = atomic_exchange(&global_qfi_stats[qfi].bytes, 0);
+
       if (pps > 0) {
         double mbps = (bytes * 8.0) / (5 * 1e6);
-        printf(" QFI %d: %lu PPS, %.2f Mbps |", qfi, pps / 5, mbps);
+        char pps_buf[16];
+        unsigned long pps_per_sec = pps / 5;
+        print_human_pps(pps_buf, sizeof(pps_buf), pps_per_sec);
+        printf("  %3d | %7s | %6.2f\n", qfi, pps_buf, mbps);
+        total_pps += pps;
+        total_bytes += bytes;
       }
     }
-    printf("\n");
+
+    if (total_pps > 0) {
+      double total_mbps = (total_bytes * 8.0) / (5 * 1e6);
+      char total_pps_buf[16];
+      print_human_pps(total_pps_buf, sizeof(total_pps_buf), total_pps / 5);
+      printf("Total: %7s PPS | %6.2f Mbps\n", total_pps_buf, total_mbps);
+    } else {
+      printf("No active QFIs in this interval.\n");
+    }
   }
+
   return NULL;
 }
 
