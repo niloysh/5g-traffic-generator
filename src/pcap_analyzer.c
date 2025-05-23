@@ -32,6 +32,13 @@
 
 #define SIZE_HISTO_MAX 1600
 #define SIZE_BUCKETS 6
+#define MAX_SECONDS 7200
+
+typedef struct {
+  uint32_t pps[MAX_SECONDS];
+  uint32_t bps[MAX_SECONDS];
+  double start_time;
+} burst_trace_t;
 
 typedef struct {
   uint64_t total_packets;
@@ -51,6 +58,7 @@ typedef struct {
 
   uint64_t size_buckets[SIZE_BUCKETS];
   uint64_t ipg_buckets[8]; // <100, 100–300, 300–600, 600–900, 900–1200, >1200
+  burst_trace_t burst;
 } stats_t;
 
 double time_diff_sec(struct timeval a, struct timeval b) {
@@ -94,36 +102,14 @@ void process_packet(const struct pcap_pkthdr *header, const u_char *packet,
                     int link_header_len, int datalink_type, stats_t *stats) {
 
   if (header->caplen < link_header_len + sizeof(struct ip)) {
-    printf("Skipping: too short\n");
     return;
   }
 
-  if (datalink_type == DLT_EN10MB) {
-
-    // struct ether_header *eth = (struct ether_header *)packet;
-    // uint16_t eth_type = ntohs(eth->ether_type);
-    // printf("EtherType = 0x%04x\n", eth_type);
-
-    // if (eth_type != ETHERTYPE_IP) {
-    //   printf("Skipping: not IPv4\n");
-    //   return;
-    // }
-  }
-
-  double current_time = 0.0;
-
-  // struct ip *ip_hdr = (struct ip *)(packet + link_header_len);
-  // printf("IP protocol = %d\n", ip_hdr->ip_p);
-
-  // if (ip_hdr->ip_p != IPPROTO_UDP) {
-  //   printf("Skipping: not UDP\n");
-  //   return;
-  // }
-
-  // printf("Accepted packet!\n");
+  double current_time = packet_time(&header->ts);
 
   if (!stats->first_packet) {
     stats->first_ts = header->ts;
+    stats->burst.start_time = current_time;
     stats->min_pkt_size = UINT32_MAX;
     stats->interarrival_min = DBL_MAX;
     stats->interarrival_max = 0.0;
@@ -141,7 +127,13 @@ void process_packet(const struct pcap_pkthdr *header, const u_char *packet,
 
   bucket_packet_size(stats, header->len);
 
-  current_time = packet_time(&header->ts);
+  // Per-second burst tracking
+  int sec_index = (int)(current_time - stats->burst.start_time);
+  if (sec_index >= 0 && sec_index < MAX_SECONDS) {
+    stats->burst.pps[sec_index]++;
+    stats->burst.bps[sec_index] += header->len;
+  }
+
   if (stats->last_packet_time > 0) {
     double gap = current_time - stats->last_packet_time;
     stats->interarrival_sum += gap;
@@ -150,6 +142,7 @@ void process_packet(const struct pcap_pkthdr *header, const u_char *packet,
     if (gap > stats->interarrival_max)
       stats->interarrival_max = gap;
     stats->interarrival_count++;
+
     double gap_ms = gap * 1000;
     if (gap_ms < 0.1)
       stats->ipg_buckets[0]++;
@@ -168,6 +161,7 @@ void process_packet(const struct pcap_pkthdr *header, const u_char *packet,
     else
       stats->ipg_buckets[7]++;
   }
+
   stats->last_packet_time = current_time;
 }
 
@@ -202,6 +196,30 @@ void write_json(const char *json_path, stats_t *s, double duration,
   fprintf(f, "    \"min\": %.2f,\n", s->interarrival_min * 1000);
   fprintf(f, "    \"avg\": %.2f,\n", avg_gap * 1000);
   fprintf(f, "    \"max\": %.2f\n", s->interarrival_max * 1000);
+  fprintf(f, "  },\n");
+
+  // Burst trace output
+  fprintf(f, "  \"burst_trace\": {\n");
+  fprintf(f, "    \"pps\": [");
+  int printed = 0;
+  for (int i = 0; i < MAX_SECONDS; i++) {
+    if (s->burst.pps[i] == 0 && printed > 0)
+      break;
+    if (i > 0)
+      fprintf(f, ", ");
+    fprintf(f, "%u", s->burst.pps[i]);
+    printed++;
+  }
+  fprintf(f, "],\n");
+
+  fprintf(f, "    \"bps\": [");
+  for (int i = 0; i < printed; i++) {
+    if (i > 0)
+      fprintf(f, ", ");
+    fprintf(f, "%u", s->burst.bps[i]);
+  }
+  fprintf(f, "]\n");
+
   fprintf(f, "  }\n");
   fprintf(f, "}\n");
 

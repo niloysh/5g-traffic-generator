@@ -76,6 +76,9 @@ typedef struct {
   uint64_t next_send_ns;
   double next_gap_ms;
   int next_pkt_size;
+  json_t *burst_pps_array; // JSON array of burst_trace.pps
+  double baseline_pps;     // computed from profile
+  uint64_t start_time_ns;  // when this TEID started
 } teid_entry_t;
 
 typedef struct {
@@ -246,7 +249,6 @@ void *sender_thread(void *arg) {
                   &t->rand_seed),
               MAX_INNER_PAYLOAD);
 
-      entry->next_pkt_size = MIN(entry->next_pkt_size, MAX_INNER_PAYLOAD);
       int inner_len = build_inner_packet(inner_buf, entry->next_pkt_size);
       build_gtpu_packet(packet, t->src_mac, t->dst_mac, t->src_ip, t->dst_ip,
                         entry->teid, entry->qfi, inner_buf, inner_len);
@@ -265,6 +267,7 @@ void *sender_thread(void *arg) {
                          sent, __ATOMIC_RELAXED);
       sent_any = true;
 
+      // Sample nominal gap from profile
       json_t *gap_stats_json = json_object_get(
           json_object_get(entry->profile, "stats"), "inter_packet_gap_ms");
       gap_stats_t gaps = {
@@ -272,8 +275,25 @@ void *sender_thread(void *arg) {
           .avg = json_number_value(json_object_get(gap_stats_json, "avg")),
           .max = json_number_value(json_object_get(gap_stats_json, "max"))};
       entry->next_gap_ms = sample_gap(&gaps, &t->rand_seed);
-      entry->next_send_ns = now + (uint64_t)(entry->next_gap_ms * 1e6);
 
+      // Modulate gap based on burst_trace
+      if (entry->burst_pps_array) {
+        uint64_t elapsed_sec = (now - entry->start_time_ns) / 1000000000ULL;
+        size_t trace_len = json_array_size(entry->burst_pps_array);
+        if (trace_len > 0) {
+          size_t idx = elapsed_sec % trace_len;
+          json_t *pps_val = json_array_get(entry->burst_pps_array, idx);
+          if (json_is_integer(pps_val)) {
+            double burst_pps = json_integer_value(pps_val);
+            double baseline = fmax(entry->baseline_pps, 1.0);
+            double multiplier = burst_pps / baseline;
+            multiplier = fmin(fmax(multiplier, 0.2), 5.0); // clamp
+            entry->next_gap_ms /= multiplier;
+          }
+        }
+      }
+
+      entry->next_send_ns = now + (uint64_t)(entry->next_gap_ms * 1e6);
       next_wake_ns = MIN(next_wake_ns, entry->next_send_ns);
     }
 
@@ -408,12 +428,33 @@ int main(int argc, char *argv[]) {
       json_t *profile = json_object_get(profiles, app);
       int qfi = json_integer_value(json_object_get(profile, "qfi"));
 
+      json_t *stats = json_object_get(profile, "stats");
+      json_t *burst_trace = json_object_get(stats, "burst_trace");
+      json_t *pps_array =
+          burst_trace ? json_object_get(burst_trace, "pps") : NULL;
+
+      double baseline_pps = 1.0;
+      if (pps_array && json_is_array(pps_array)) {
+        uint64_t sum = 0;
+        size_t len = json_array_size(pps_array);
+        for (size_t k = 0; k < len; k++) {
+          json_t *val = json_array_get(pps_array, k);
+          if (json_is_integer(val))
+            sum += json_integer_value(val);
+        }
+        if (len > 0)
+          baseline_pps = (double)sum / len;
+      }
+
       args[t].teids[i - start] = (teid_entry_t){
           .teid = json_integer_value(json_object_get(teid_obj, "teid")),
           .app = app,
           .profile = profile,
           .qfi = qfi,
-          .next_send_ns = 0};
+          .next_send_ns = 0,
+          .burst_pps_array = pps_array,
+          .baseline_pps = baseline_pps,
+          .start_time_ns = now_nsec()};
 
       args[t].teids[i - start].next_pkt_size = sample_packet_size(
           json_object_get(
