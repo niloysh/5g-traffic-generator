@@ -1,9 +1,29 @@
-/** @file: gtpu_anomaly_injector.c
- * @brief: Parameterized GTP-U CBR traffic generator for anomaly injection
+/**
+ * @file gtpu_anomaly_injector.c
+ * @brief GTP-U constant-bit-rate traffic generator for short-lived anomaly injection
  *
- * @example: sudo ./gtpu_anomaly_injector --interface enp2s0f0 --src-ip
- * 192.168.44.13 --dst-ip 192.168.44.18 --teids 0x2000,0x2001 --qfis 1,2 --pps
- * 300000 --duration 3 --num-threads 2
+ * This tool sends GTP-U encapsulated packets at a user-specified packets-per-second (PPS)
+ * rate, evenly paced over a precise time window (`--duration`), to simulate queue-level
+ * anomalies like microbursts in programmable data planes.
+ *
+ * Traffic is distributed across multiple threads, each responsible for a slice (TEID-QFI pair).
+ * Per-thread packet pacing uses CLOCK_MONOTONIC and absolute sleeps to ensure that bursts last
+ * exactly the configured duration.
+ *
+ * Example usage:
+ *
+ *     sudo ./gtpu_anomaly_injector \
+ *         --interface enp2s0f0 \
+ *         --src-ip 192.168.44.13 \
+ *         --dst-ip 192.168.44.18 \
+ *         --teids 0x2000,0x2001 \
+ *         --qfis 1,2 \
+ *         --pps 300000 \
+ *         --duration 0.1 \
+ *         --num-threads 2
+ *
+ * Output includes nanosecond-precision CLOCK_REALTIME timestamps for anomaly start/end
+ * to align with INT-XD telemetry analysis.
  */
 
  #define _GNU_SOURCE
@@ -50,6 +70,8 @@
  double duration = 5.0;
  int pps = 100000;
  int pps_per_thread = 0;
+ 
+ struct timespec inject_start, inject_end;
  
  void handle_signal(int sig) { (void)sig; stop = 1; }
  
@@ -100,6 +122,7 @@
    uint8_t inner_buf[512];
    struct timespec start, now, next_send;
  
+   clock_gettime(CLOCK_REALTIME, &inject_start);
    clock_gettime(CLOCK_MONOTONIC, &start);
    clock_gettime(CLOCK_MONOTONIC, &next_send);
    const long nanos_per_pkt = 1000000000L / pps_per_thread;
@@ -205,100 +228,100 @@
    }
    for (int i = 0; i < num_threads; i++) pthread_join(threads[i], NULL);
  
+   clock_gettime(CLOCK_REALTIME, &inject_end);
+   uint64_t start_ns = inject_start.tv_sec * 1000000000ULL + inject_start.tv_nsec;
+   uint64_t end_ns   = inject_end.tv_sec   * 1000000000ULL + inject_end.tv_nsec;
+ 
+   printf("ANOMALY_START_NS=%lu\n", start_ns);
+   printf("ANOMALY_END_NS=%lu\n", end_ns);
+ 
    double mbits = (total_bytes * 8.0) / 1e6;
-   printf("[+] Sent %lu packets (%.2f Mbps) in %f seconds using %d threads\n",
+   printf("[+] Sent %lu packets (%.2f Mbps) in %.3f seconds using %d threads\n",
           total_packets, mbits / duration, duration, num_threads);
    return 0;
  }
  
-
-int build_gtpu_packet(uint8_t *packet, const uint8_t *src_mac,
-                      const uint8_t *dst_mac, const char *outer_src_ip,
-                      const char *outer_dst_ip, const uint8_t *inner_payload,
-                      int inner_len, uint32_t teid, uint8_t qfi) {
-  struct ethhdr *eth = (struct ethhdr *)packet;
-  struct iphdr *ip_outer = (struct iphdr *)(packet + sizeof(struct ethhdr));
-  struct udphdr *udp_outer =
-      (struct udphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct iphdr));
-  uint8_t *gtpu_hdr = (uint8_t *)(packet + sizeof(struct ethhdr) +
-                                  sizeof(struct iphdr) + sizeof(struct udphdr));
-  uint8_t *payload_dst = gtpu_hdr + GTPU_TOTAL_HDR_LEN;
-
-  gtpu_hdr[0] = 0x34;
-  gtpu_hdr[1] = 0xFF;
-  uint16_t gtpu_len = htons(inner_len + GTPU_PAD_LEN + GTPU_QFI_EXT_LEN);
-  memcpy(&gtpu_hdr[2], &gtpu_len, 2);
-  uint32_t teid_net = htonl(teid);
-  memcpy(&gtpu_hdr[4], &teid_net, 4);
-  gtpu_hdr[8] = gtpu_hdr[9] = gtpu_hdr[10] = 0x00;
-  gtpu_hdr[11] = 0x85;
-  gtpu_hdr[12] = 0x01;
-  gtpu_hdr[13] = (0x1 << 4);
-  gtpu_hdr[14] = qfi & 0x3F;
-  gtpu_hdr[15] = 0x00;
-
-  memcpy(payload_dst, inner_payload, inner_len);
-  int total_payload_len = GTPU_TOTAL_HDR_LEN + inner_len;
-
-  memcpy(eth->h_dest, dst_mac, 6);
-  memcpy(eth->h_source, src_mac, 6);
-  eth->h_proto = htons(ETH_P_IP);
-
-  ip_outer->ihl = 5;
-  ip_outer->version = 4;
-  ip_outer->tos = 0;
-  ip_outer->tot_len =
-      htons(sizeof(struct iphdr) + sizeof(struct udphdr) + total_payload_len);
-  ip_outer->id = htons(0);
-  ip_outer->frag_off = 0;
-  ip_outer->ttl = 64;
-  ip_outer->protocol = IPPROTO_UDP;
-  ip_outer->saddr = inet_addr(outer_src_ip);
-  ip_outer->daddr = inet_addr(outer_dst_ip);
-  ip_outer->check = 0;
-  ip_outer->check =
-      checksum((unsigned short *)ip_outer, sizeof(struct iphdr) / 2);
-
-  udp_outer->source = htons(12345);
-  udp_outer->dest = htons(GTPU_PORT);
-  udp_outer->len = htons(sizeof(struct udphdr) + total_payload_len);
-  udp_outer->check = 0;
-
-  return sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) +
-         total_payload_len;
-}
-
-int build_inner_packet(uint8_t *buf, const char *src_ip, const char *dst_ip,
-                       uint16_t sport, uint16_t dport) {
-  struct iphdr *ip = (struct iphdr *)buf;
-  struct udphdr *udp = (struct udphdr *)(buf + sizeof(struct iphdr));
-  char *payload = (char *)(buf + sizeof(struct iphdr) + sizeof(struct udphdr));
-
-  memset(payload, 'A', INNER_PAYLOAD_SIZE);
-
-  ip->ihl = 5;
-  ip->version = 4;
-  ip->tos = 0;
-  ip->tot_len =
-      htons(sizeof(struct iphdr) + sizeof(struct udphdr) + INNER_PAYLOAD_SIZE);
-  ip->id = htons(1234);
-  ip->frag_off = 0;
-  ip->ttl = 64;
-  ip->protocol = IPPROTO_UDP;
-  ip->saddr = inet_addr(src_ip);
-  ip->daddr = inet_addr(dst_ip);
-  ip->check = 0;
-  ip->check = checksum((unsigned short *)ip, sizeof(struct iphdr) / 2);
-
-  udp->source = htons(sport);
-  udp->dest = htons(dport);
-  udp->len = htons(sizeof(struct udphdr) + INNER_PAYLOAD_SIZE);
-  udp->check = 0;
-
-  return sizeof(struct iphdr) + sizeof(struct udphdr) + INNER_PAYLOAD_SIZE;
-}
-
-int parse_mac(const char *mac_str, uint8_t *mac) {
-  return sscanf(mac_str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac[0], &mac[1],
-                &mac[2], &mac[3], &mac[4], &mac[5]) == 6;
-}
+ int build_gtpu_packet(uint8_t *packet, const uint8_t *src_mac,
+                       const uint8_t *dst_mac, const char *outer_src_ip,
+                       const char *outer_dst_ip, const uint8_t *inner_payload,
+                       int inner_len, uint32_t teid, uint8_t qfi) {
+   struct ethhdr *eth = (struct ethhdr *)packet;
+   struct iphdr *ip_outer = (struct iphdr *)(packet + sizeof(struct ethhdr));
+   struct udphdr *udp_outer = (struct udphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct iphdr));
+   uint8_t *gtpu_hdr = (uint8_t *)(packet + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));
+   uint8_t *payload_dst = gtpu_hdr + GTPU_TOTAL_HDR_LEN;
+ 
+   gtpu_hdr[0] = 0x34;
+   gtpu_hdr[1] = 0xFF;
+   uint16_t gtpu_len = htons(inner_len + GTPU_PAD_LEN + GTPU_QFI_EXT_LEN);
+   memcpy(&gtpu_hdr[2], &gtpu_len, 2);
+   uint32_t teid_net = htonl(teid);
+   memcpy(&gtpu_hdr[4], &teid_net, 4);
+   gtpu_hdr[8] = gtpu_hdr[9] = gtpu_hdr[10] = 0x00;
+   gtpu_hdr[11] = 0x85;
+   gtpu_hdr[12] = 0x01;
+   gtpu_hdr[13] = (0x1 << 4);
+   gtpu_hdr[14] = qfi & 0x3F;
+   gtpu_hdr[15] = 0x00;
+ 
+   memcpy(payload_dst, inner_payload, inner_len);
+   int total_payload_len = GTPU_TOTAL_HDR_LEN + inner_len;
+ 
+   memcpy(eth->h_dest, dst_mac, 6);
+   memcpy(eth->h_source, src_mac, 6);
+   eth->h_proto = htons(ETH_P_IP);
+ 
+   ip_outer->ihl = 5;
+   ip_outer->version = 4;
+   ip_outer->tos = 0;
+   ip_outer->tot_len = htons(sizeof(struct iphdr) + sizeof(struct udphdr) + total_payload_len);
+   ip_outer->id = htons(0);
+   ip_outer->frag_off = 0;
+   ip_outer->ttl = 64;
+   ip_outer->protocol = IPPROTO_UDP;
+   ip_outer->saddr = inet_addr(outer_src_ip);
+   ip_outer->daddr = inet_addr(outer_dst_ip);
+   ip_outer->check = 0;
+   ip_outer->check = checksum((unsigned short *)ip_outer, sizeof(struct iphdr) / 2);
+ 
+   udp_outer->source = htons(12345);
+   udp_outer->dest = htons(GTPU_PORT);
+   udp_outer->len = htons(sizeof(struct udphdr) + total_payload_len);
+   udp_outer->check = 0;
+ 
+   return sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + total_payload_len;
+ }
+ 
+ int build_inner_packet(uint8_t *buf, const char *src_ip, const char *dst_ip,
+                        uint16_t sport, uint16_t dport) {
+   struct iphdr *ip = (struct iphdr *)buf;
+   struct udphdr *udp = (struct udphdr *)(buf + sizeof(struct iphdr));
+   char *payload = (char *)(buf + sizeof(struct iphdr) + sizeof(struct udphdr));
+ 
+   memset(payload, 'A', INNER_PAYLOAD_SIZE);
+ 
+   ip->ihl = 5;
+   ip->version = 4;
+   ip->tos = 0;
+   ip->tot_len = htons(sizeof(struct iphdr) + sizeof(struct udphdr) + INNER_PAYLOAD_SIZE);
+   ip->id = htons(1234);
+   ip->frag_off = 0;
+   ip->ttl = 64;
+   ip->protocol = IPPROTO_UDP;
+   ip->saddr = inet_addr(src_ip);
+   ip->daddr = inet_addr(dst_ip);
+   ip->check = 0;
+   ip->check = checksum((unsigned short *)ip, sizeof(struct iphdr) / 2);
+ 
+   udp->source = htons(sport);
+   udp->dest = htons(dport);
+   udp->len = htons(sizeof(struct udphdr) + INNER_PAYLOAD_SIZE);
+   udp->check = 0;
+ 
+   return sizeof(struct iphdr) + sizeof(struct udphdr) + INNER_PAYLOAD_SIZE;
+ }
+ 
+ int parse_mac(const char *mac_str, uint8_t *mac) {
+   return sscanf(mac_str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac[0], &mac[1],
+                 &mac[2], &mac[3], &mac[4], &mac[5]) == 6;
+ }
