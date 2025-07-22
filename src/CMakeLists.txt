@@ -9,6 +9,7 @@ set(SOURCES
   gtpu_replay.c
   gtpu_anomaly_injector.c
   gtpu_traffic_generator.c
+  gtpu_encap_replay.c
 )
 
 foreach(source_file ${SOURCES})
@@ -22,6 +23,8 @@ foreach(source_file ${SOURCES})
     target_link_libraries(${exe} ${JANSSON_LIBRARIES} pthread m)
   elseif(${exe} STREQUAL "gtpu_cbr_generator")
     target_link_libraries(${exe} pthread)
+  elseif(${exe} STREQUAL "gtpu_encap_replay")
+    target_link_libraries(${exe} pthread m)
   endif()
 
   install(TARGETS ${exe} DESTINATION bin)

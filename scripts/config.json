@@ -1,0 +1,107 @@
+{
+    "duration_minutes": 5,
+    "interface": "enp2s0f0",
+    "base_teid": 4096,
+    "ue_count": 100,
+    "qos_profiles": [
+        {
+            "application": "browsing",
+            "description": "General web browsing (low loss, low jitter)",
+            "pcap": "../pcaps_new/browsing.pcap",
+            "qfi": 9,
+            "5qi": 9,
+            "idle_range": [
+                5,
+                20
+            ]
+        },
+        {
+            "application": "file_download",
+            "description": "Large file download over HTTP",
+            "pcap": "../pcaps_new/file-download-http.pcap",
+            "qfi": 6,
+            "5qi": 6,
+            "idle_range": [
+                30,
+                300
+            ]
+        },
+        {
+            "application": "file_sync",
+            "description": "Nextcloud file synchronization",
+            "pcap": "../pcaps_new/file-sync-nextcloud.pcap",
+            "qfi": 8,
+            "5qi": 6,
+            "idle_range": [
+                30,
+                120
+            ]
+        },
+        {
+            "application": "cloud_gaming",
+            "description": "GeForce NOW stream (real-time gaming)",
+            "pcap": "../pcaps_new/geforce_skyrim.pcap",
+            "qfi": 3,
+            "5qi": 3,
+            "idle_range": [
+                10,
+                20
+            ]
+        },
+        {
+            "application": "flame_sensor",
+            "description": "IoT (low-rate control messages)",
+            "pcap": "../pcaps_new/flame_sensor.pcap",
+            "qfi": 5,
+            "5qi": 75,
+            "idle_range": [
+                0,
+                1
+            ]
+        },
+        {
+            "application": "video_call",
+            "description": "MS Teams video conferencing",
+            "pcap": "../pcaps_new/teams.pcap",
+            "qfi": 7,
+            "5qi": 65,
+            "idle_range": [
+                5,
+                10
+            ]
+        },
+        {
+            "application": "twitch",
+            "description": "Live video streaming (Twitch)",
+            "pcap": "../pcaps_new/twitch.pcap",
+            "qfi": 2,
+            "5qi": 2,
+            "idle_range": [
+                10,
+                15
+            ]
+        },
+        {
+            "application": "voip",
+            "description": "Voice over IP (VoNR-style)",
+            "pcap": "../pcaps_new/voip.pcap",
+            "qfi": 1,
+            "5qi": 1,
+            "idle_range": [
+                1,
+                3
+            ]
+        },
+        {
+            "application": "youtube",
+            "description": "Buffered video streaming (YouTube)",
+            "pcap": "../pcaps_new/youtube.pcap",
+            "qfi": 4,
+            "5qi": 6,
+            "idle_range": [
+                10,
+                15
+            ]
+        }
+    ]
+}
